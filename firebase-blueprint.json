@@ -1,0 +1,76 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A company or potential customer to research.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Company name" },
+        "industry": { "type": "string", "description": "Industry category" },
+        "website": { "type": "string", "description": "Company website URL" },
+        "status": { "type": "string", "enum": ["new", "researching", "evaluated", "contacted"], "description": "Current status of the lead" },
+        "userId": { "type": "string", "description": "Owner of the lead" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["name", "userId", "createdAt"]
+    },
+    "Research": {
+      "title": "Research",
+      "description": "Gathered facts and summaries about a company.",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "description": "Reference to the Lead" },
+        "platform": { "type": "string", "description": "Source platform (e.g., LinkedIn, Blog)" },
+        "content": { "type": "string", "description": "Summarized content" },
+        "sourceUrl": { "type": "string", "description": "Original URL if available" },
+        "userId": { "type": "string", "description": "Owner of the research" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["leadId", "platform", "content", "userId", "createdAt"]
+    },
+    "Criterion": {
+      "title": "Criterion",
+      "description": "Evaluation criteria for company probability.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Criterion name" },
+        "description": { "type": "string", "description": "What this criterion evaluates" },
+        "weight": { "type": "number", "description": "Weight in the final score (0-1)" },
+        "userId": { "type": "string", "description": "Owner of the criterion" }
+      },
+      "required": ["name", "weight", "userId"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Services offered by the sales team.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Service name" },
+        "description": { "type": "string", "description": "Service details" },
+        "userId": { "type": "string", "description": "Owner of the service" }
+      },
+      "required": ["name", "userId"]
+    },
+    "Evaluation": {
+      "title": "Evaluation",
+      "description": "AI-generated evaluation and insights for a lead.",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "description": "Reference to the Lead" },
+        "score": { "type": "number", "description": "Probability score (0-100)" },
+        "insights": { "type": "string", "description": "Detailed AI insights" },
+        "criteriaScores": { "type": "object", "description": "Breakdown of scores per criterion" },
+        "userId": { "type": "string", "description": "Owner of the evaluation" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["leadId", "score", "userId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/leads/{leadId}": { "schema": "Lead", "description": "Company leads" },
+    "/research/{researchId}": { "schema": "Research", "description": "Research data" },
+    "/criteria/{criterionId}": { "schema": "Criterion", "description": "Evaluation criteria" },
+    "/services/{serviceId}": { "schema": "Service", "description": "Sales services" },
+    "/evaluations/{evaluationId}": { "schema": "Evaluation", "description": "Lead evaluations" }
+  }
+}

@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: leads
+    // Fields: name, industry, website, status, userId, createdAt
+    //
+    // Collection: research
+    // Fields: leadId, platform, content, sourceUrl, userId, createdAt
+    //
+    // Collection: criteria
+    // Fields: name, description, weight, userId
+    //
+    // Collection: services
+    // Fields: name, description, userId
+    //
+    // Collection: evaluations
+    // Fields: leadId, score, insights, criteriaScores, userId, createdAt
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+
+    function isValidLead(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             (data.industry == null || data.industry is string) &&
+             (data.website == null || data.website is string) &&
+             data.status in ['new', 'researching', 'evaluated', 'contacted'] &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidResearch(data) {
+      return data.leadId is string &&
+             data.platform is string && data.platform.size() > 0 &&
+             data.content is string && data.content.size() > 0 &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidCriterion(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.weight is number && data.weight >= 0 && data.weight <= 1 &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidService(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidEvaluation(data) {
+      return data.leadId is string &&
+             data.score is number && data.score >= 0 && data.score <= 100 &&
+             data.userId == request.auth.uid;
+    }
+
+    match /leads/{leadId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidLead(request.resource.data);
+      allow update: if isDocOwner() && isValidLead(request.resource.data) && uidUnchanged();
+      allow delete: if isDocOwner();
+    }
+
+    match /research/{researchId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidResearch(request.resource.data);
+      allow update: if isDocOwner() && isValidResearch(request.resource.data) && uidUnchanged();
+      allow delete: if isDocOwner();
+    }
+
+    match /criteria/{criterionId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidCriterion(request.resource.data);
+      allow update: if isDocOwner() && isValidCriterion(request.resource.data) && uidUnchanged();
+      allow delete: if isDocOwner();
+    }
+
+    match /services/{serviceId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidService(request.resource.data);
+      allow update: if isDocOwner() && isValidService(request.resource.data) && uidUnchanged();
+      allow delete: if isDocOwner();
+    }
+
+    match /evaluations/{evaluationId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidEvaluation(request.resource.data);
+      allow update: if isDocOwner() && isValidEvaluation(request.resource.data) && uidUnchanged();
+      allow delete: if isDocOwner();
+    }
+  }
+}
