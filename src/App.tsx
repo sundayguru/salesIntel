@@ -51,14 +51,18 @@ export default function App() {
   
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState('all');
+  const [leadIndustryFilter, setLeadIndustryFilter] = useState('all');
   const [leadPage, setLeadPage] = useState(1);
   const leadsPerPage = 9;
+
+  const industries = Array.from(new Set(leads.map(l => l.industry).filter(Boolean))) as string[];
 
   const filteredLeads = leads.filter(lead => {
     const matchesSearch = lead.name.toLowerCase().includes(leadSearchQuery.toLowerCase()) || 
                          (lead.industry?.toLowerCase().includes(leadSearchQuery.toLowerCase()));
     const matchesStatus = leadStatusFilter === 'all' || lead.status === leadStatusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesIndustry = leadIndustryFilter === 'all' || lead.industry === leadIndustryFilter;
+    return matchesSearch && matchesStatus && matchesIndustry;
   });
 
   const totalPages = Math.ceil(filteredLeads.length / leadsPerPage);
@@ -66,7 +70,7 @@ export default function App() {
 
   useEffect(() => {
     setLeadPage(1);
-  }, [leadSearchQuery, leadStatusFilter]);
+  }, [leadSearchQuery, leadStatusFilter, leadIndustryFilter]);
 
   const cleanObject = (obj: any) => {
     const newObj: any = {};
@@ -426,6 +430,16 @@ export default function App() {
                 <option value="researching">Researching</option>
                 <option value="evaluated">Evaluated</option>
                 <option value="contacted">Contacted</option>
+              </select>
+              <select
+                value={leadIndustryFilter}
+                onChange={(e) => setLeadIndustryFilter(e.target.value)}
+                className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 outline-none"
+              >
+                <option value="all">All Industries</option>
+                {industries.map(industry => (
+                  <option key={industry} value={industry}>{industry}</option>
+                ))}
               </select>
             </div>
           </div>
