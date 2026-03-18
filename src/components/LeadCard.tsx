@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Lead, Criterion } from '../types';
-import { Building2, Globe, Tag, Trash2, Search, FileText, Mail, Briefcase, CheckCircle2, ChevronDown, ChevronUp, Link2, User, Plus } from 'lucide-react';
+import Select from 'react-select';
+import { Lead, Criterion, UserProfile } from '../types';
+import { Building2, Globe, Tag, Trash2, Search, FileText, Mail, Briefcase, CheckCircle2, ChevronDown, ChevronUp, Link2, User, Plus, UserPlus } from 'lucide-react';
 
 interface LeadCardProps {
   lead: Lead;
   criteria: Criterion[];
+  users: UserProfile[];
   onDelete: (id: string) => void;
   onResearch: (lead: Lead) => void;
   onEvaluate: (lead: Lead) => void;
@@ -12,20 +14,45 @@ interface LeadCardProps {
   onDeck: (lead: Lead) => void;
   onTasks: (lead: Lead) => void;
   onAddCriteria: (lead: Lead) => void;
+  onAssign: (leadId: string, user: UserProfile | null) => void;
 }
 
 export const LeadCard: React.FC<LeadCardProps> = ({ 
   lead, 
   criteria, 
+  users,
   onDelete, 
   onResearch, 
   onEvaluate, 
   onEmail, 
   onDeck, 
   onTasks,
-  onAddCriteria
+  onAddCriteria,
+  onAssign
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+
+  const userOptions = users.map(u => ({ value: u.uid, label: u.displayName, email: u.email, user: u }));
+  const selectedUserOption = lead.assignedToUid ? userOptions.find(o => o.value === lead.assignedToUid) : null;
+
+  const selectStyles = {
+    control: (base: any) => ({
+      ...base,
+      borderRadius: '0.75rem',
+      borderColor: '#e7e5e4',
+      fontSize: '0.875rem',
+      boxShadow: 'none',
+      '&:hover': { borderColor: '#e7e5e4' }
+    }),
+    option: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: state.isFocused ? '#f5f5f4' : 'white',
+      color: '#1c1917',
+      fontSize: '0.875rem',
+      '&:active': { backgroundColor: '#e7e5e4' }
+    })
+  };
 
   const linkedCriteria = criteria.filter(c => c.leadId === lead.id);
   const globalCriteriaCount = criteria.filter(c => !c.leadId).length;
@@ -82,6 +109,39 @@ export const LeadCard: React.FC<LeadCardProps> = ({
             </a>
           </div>
         )}
+
+        <div className="pt-2">
+          {isAssigning ? (
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold text-stone-400 uppercase tracking-wider">Assign Lead To</label>
+              <Select
+                options={userOptions}
+                value={selectedUserOption}
+                onChange={(opt) => {
+                  onAssign(lead.id, opt ? opt.user : null);
+                  setIsAssigning(false);
+                }}
+                styles={selectStyles}
+                isClearable
+                placeholder="Search user..."
+                autoFocus
+                onBlur={() => setIsAssigning(false)}
+              />
+            </div>
+          ) : (
+            <button 
+              onClick={() => setIsAssigning(true)}
+              className="flex items-center gap-2 text-sm text-stone-600 hover:text-emerald-600 transition-colors group/assign"
+            >
+              <UserPlus className="w-4 h-4 text-stone-400 group-hover/assign:text-emerald-600" />
+              {lead.assignedToEmail ? (
+                <span className="font-medium text-stone-900">{lead.assignedToEmail}</span>
+              ) : (
+                <span className="text-stone-400 italic">Unassigned</span>
+              )}
+            </button>
+          )}
+        </div>
         
         {linkedCriteria.length === 0 && (
           <div className="pt-4">

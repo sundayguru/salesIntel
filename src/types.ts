@@ -5,6 +5,8 @@ export interface Lead {
   website?: string;
   status: 'new' | 'researching' | 'evaluated' | 'contacted';
   userId: string;
+  assignedToEmail?: string;
+  assignedToUid?: string;
   createdByEmail?: string;
   createdAt: string;
 }
@@ -67,6 +69,16 @@ export interface Task {
   dueDate: string;
   status: 'todo' | 'in-progress' | 'done';
   userId: string;
+  assignedToEmail?: string;
+  assignedToUid?: string;
   createdByEmail?: string;
   createdAt: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  lastLogin: string;
 }

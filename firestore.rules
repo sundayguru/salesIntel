@@ -35,6 +35,13 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == resource.data.userId;
     }
 
+    function isAssigned() {
+      return isAuthenticated() && (
+        (resource.data.assignedToUid == request.auth.uid) ||
+        (resource.data.assignedToEmail == request.auth.token.email)
+      );
+    }
+
     function uidUnchanged() {
       return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
     }
@@ -45,6 +52,8 @@ service cloud.firestore {
              (!('website' in data) || data.website is string || data.website == null) &&
              data.status in ['new', 'researching', 'evaluated', 'contacted'] &&
              data.userId == request.auth.uid &&
+             (!('assignedToEmail' in data) || data.assignedToEmail is string || data.assignedToEmail == null) &&
+             (!('assignedToUid' in data) || data.assignedToUid is string || data.assignedToUid == null) &&
              (!('createdByEmail' in data) || data.createdByEmail is string || data.createdByEmail == null) &&
              (!('createdAt' in data) || data.createdAt is string || data.createdAt == null);
     }
@@ -100,14 +109,24 @@ service cloud.firestore {
              data.status in ['todo', 'in-progress', 'done'] &&
              (!('dueDate' in data) || data.dueDate is string || data.dueDate == null) &&
              data.userId == request.auth.uid &&
+             (!('assignedToEmail' in data) || data.assignedToEmail is string || data.assignedToEmail == null) &&
+             (!('assignedToUid' in data) || data.assignedToUid is string || data.assignedToUid == null) &&
              (!('createdByEmail' in data) || data.createdByEmail is string || data.createdByEmail == null) &&
              (!('createdAt' in data) || data.createdAt is string || data.createdAt == null);
     }
 
+    function isValidUserProfile(data) {
+      return data.uid == request.auth.uid &&
+             data.email is string &&
+             data.displayName is string &&
+             (!('photoURL' in data) || data.photoURL is string || data.photoURL == null) &&
+             data.lastLogin is string;
+    }
+
     match /leads/{leadId} {
-      allow read: if isDocOwner();
+      allow read: if isDocOwner() || isAssigned();
       allow create: if isAuthenticated() && isValidLead(request.resource.data);
-      allow update: if isDocOwner() && isValidLead(request.resource.data) && uidUnchanged();
+      allow update: if (isDocOwner() || isAssigned()) && isValidLead(request.resource.data) && uidUnchanged();
       allow delete: if isDocOwner();
     }
 
@@ -147,10 +166,15 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow read: if isDocOwner();
+      allow read: if isDocOwner() || isAssigned();
       allow create: if isAuthenticated() && isValidTask(request.resource.data);
-      allow update: if isDocOwner() && isValidTask(request.resource.data) && uidUnchanged();
+      allow update: if (isDocOwner() || isAssigned()) && isValidTask(request.resource.data) && uidUnchanged();
       allow delete: if isDocOwner();
+    }
+
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(uid) && isValidUserProfile(request.resource.data);
     }
   }
 }

@@ -10,6 +10,8 @@
         "website": { "type": "string", "description": "Company website URL" },
         "status": { "type": "string", "enum": ["new", "researching", "evaluated", "contacted"], "description": "Current status of the lead" },
         "userId": { "type": "string", "description": "Owner of the lead" },
+        "assignedToEmail": { "type": "string", "description": "Email of the assigned user" },
+        "assignedToUid": { "type": "string", "description": "UID of the assigned user" },
         "createdByEmail": { "type": "string", "description": "Email of the creator" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
@@ -81,10 +83,25 @@
         "dueDate": { "type": "string", "format": "date", "description": "Due date" },
         "status": { "type": "string", "enum": ["todo", "in-progress", "done"], "description": "Current status" },
         "userId": { "type": "string", "description": "Owner of the task" },
+        "assignedToEmail": { "type": "string", "description": "Email of the assigned user" },
+        "assignedToUid": { "type": "string", "description": "UID of the assigned user" },
         "createdByEmail": { "type": "string", "description": "Email of the creator" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
       "required": ["leadId", "title", "status", "userId", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User UID" },
+        "email": { "type": "string", "description": "User email" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "User photo URL" },
+        "lastLogin": { "type": "string", "format": "date-time", "description": "Last login timestamp" }
+      },
+      "required": ["uid", "email", "displayName", "lastLogin"]
     },
     "SavedAsset": {
       "title": "SavedAsset",
@@ -108,6 +125,7 @@
     "/services/{serviceId}": { "schema": "Service", "description": "Sales services" },
     "/evaluations/{evaluationId}": { "schema": "Evaluation", "description": "Lead evaluations" },
     "/tasks/{taskId}": { "schema": "Task", "description": "Lead tasks" },
-    "/savedAssets/{assetId}": { "schema": "SavedAsset", "description": "Generated emails and decks" }
+    "/savedAssets/{assetId}": { "schema": "SavedAsset", "description": "Generated emails and decks" },
+    "/users/{uid}": { "schema": "UserProfile", "description": "User profiles" }
   }
 }

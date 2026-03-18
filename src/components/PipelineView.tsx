@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lead, Criterion } from '../types';
+import { Lead, Criterion, UserProfile } from '../types';
 import { 
   Circle, 
   Clock, 
@@ -12,6 +12,7 @@ import { LeadCard } from './LeadCard';
 interface PipelineViewProps {
   leads: Lead[];
   criteria: Criterion[];
+  users: UserProfile[];
   onUpdateStatus: (id: string, status: Lead['status']) => void;
   onDeleteLead: (id: string) => void;
   onResearch: (lead: Lead) => void;
@@ -20,11 +21,13 @@ interface PipelineViewProps {
   onDeck: (lead: Lead) => void;
   onTasks: (lead: Lead) => void;
   onAddCriteria: (lead: Lead) => void;
+  onAssignLead: (leadId: string, user: UserProfile | null) => void;
 }
 
 export const PipelineView: React.FC<PipelineViewProps> = ({ 
   leads, 
   criteria,
+  users,
   onUpdateStatus, 
   onDeleteLead,
   onResearch,
@@ -32,7 +35,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   onEmail,
   onDeck,
   onTasks,
-  onAddCriteria
+  onAddCriteria,
+  onAssignLead
 }) => {
   const stages: { id: Lead['status']; label: string; icon: React.ReactNode; color: string }[] = [
     { id: 'new', label: 'New Leads', icon: <Circle className="w-4 h-4" />, color: 'bg-blue-500' },
@@ -81,6 +85,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                         <LeadCard
                           lead={lead}
                           criteria={criteria}
+                          users={users}
                           onDelete={onDeleteLead}
                           onResearch={onResearch}
                           onEvaluate={onEvaluate}
@@ -88,6 +93,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                           onDeck={onDeck}
                           onTasks={onTasks}
                           onAddCriteria={onAddCriteria}
+                          onAssign={onAssignLead}
                         />
                         
                         {/* Status Move Button Overlay */}

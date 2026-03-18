@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Select from 'react-select';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { Lead, Research, Criterion, Service, Evaluation, SavedAsset, Task, UserProfile } from './types';
 import { 
   collection, 
   onSnapshot, 
@@ -10,7 +11,8 @@ import {
   deleteDoc, 
   doc, 
   updateDoc,
-  serverTimestamp 
+  serverTimestamp,
+  setDoc 
 } from 'firebase/firestore';
 
 enum OperationType {
@@ -52,7 +54,6 @@ import { Dashboard } from './components/Dashboard';
 import { SavedAssets } from './components/SavedAssets';
 import { TaskManager } from './components/TaskManager';
 import { PipelineView } from './components/PipelineView';
-import { Lead, Research, Criterion, Service, Evaluation, SavedAsset, Task } from './types';
 import { 
   generateLeadsByIndustry, 
   researchCompanyAI, 
@@ -125,6 +126,7 @@ export default function App() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [savedAssets, setSavedAssets] = useState<SavedAsset[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [suggestedLeads, setSuggestedLeads] = useState<Partial<Lead>[]>([]);
   const [, setAsyncError] = useState(); // Used to throw async errors to ErrorBoundary
 
@@ -156,6 +158,7 @@ export default function App() {
   const [newLeadName, setNewLeadName] = useState('');
   const [newLeadIndustry, setNewLeadIndustry] = useState('');
   const [newLeadWebsite, setNewLeadWebsite] = useState('');
+  const [newLeadAssignedTo, setNewLeadAssignedTo] = useState<UserProfile | null>(null);
   
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState('all');
@@ -222,8 +225,19 @@ export default function App() {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+      if (user) {
+        // Sync user profile
+        const userRef = doc(db, 'users', user.uid);
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || user.email?.split('@')[0] || 'Unknown',
+          photoURL: user.photoURL,
+          lastLogin: new Date().toISOString()
+        }, { merge: true });
+      }
       setLoading(false);
     });
     return unsubscribe;
@@ -231,6 +245,12 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
+
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      setUsers(snapshot.docs.map(doc => doc.data() as UserProfile));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
 
     const qLeads = query(collection(db, 'leads'), where('userId', '==', user.uid));
     const unsubLeads = onSnapshot(qLeads, (snapshot) => {
@@ -282,6 +302,7 @@ export default function App() {
     });
 
     return () => {
+      unsubUsers();
       unsubLeads();
       unsubResearch();
       unsubCriteria();
@@ -303,14 +324,28 @@ export default function App() {
         status: 'new',
         userId: user.uid,
         createdByEmail: user.email,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        assignedToEmail: newLeadAssignedTo?.email || null,
+        assignedToUid: newLeadAssignedTo?.uid || null
       }));
       setNewLeadName('');
       setNewLeadIndustry('');
       setNewLeadWebsite('');
+      setNewLeadAssignedTo(null);
       setIsAddingLead(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'leads');
+    }
+  };
+
+  const handleAssignLead = async (leadId: string, assignedUser: UserProfile | null) => {
+    try {
+      await updateDoc(doc(db, 'leads', leadId), {
+        assignedToEmail: assignedUser?.email || null,
+        assignedToUid: assignedUser?.uid || null
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `leads/${leadId}`);
     }
   };
 
@@ -672,6 +707,7 @@ export default function App() {
                 key={lead.id}
                 lead={lead}
                 criteria={criteria}
+                users={users}
                 onDelete={(id) => handleDelete('leads', id)}
                 onResearch={handleResearch}
                 onEvaluate={handleEvaluate}
@@ -685,6 +721,7 @@ export default function App() {
                   setCriteriaLeadFilter(lead.id);
                   setActiveTab('criteria');
                 }}
+                onAssign={handleAssignLead}
               />
             ))}
           </div>
@@ -773,6 +810,26 @@ export default function App() {
                       className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Assign To</label>
+                    <Select
+                      options={users.map(u => ({ value: u.uid, label: u.displayName, user: u }))}
+                      value={newLeadAssignedTo ? { value: newLeadAssignedTo.uid, label: newLeadAssignedTo.displayName } : null}
+                      onChange={(opt: any) => setNewLeadAssignedTo(opt ? opt.user : null)}
+                      placeholder="Search user..."
+                      isClearable
+                      className="text-sm"
+                      styles={{
+                        control: (base) => ({
+                          ...base,
+                          borderRadius: '0.75rem',
+                          borderColor: '#e7e5e4',
+                          boxShadow: 'none',
+                          '&:hover': { borderColor: '#e7e5e4' }
+                        })
+                      }}
+                    />
+                  </div>
                   <button type="submit" className="w-full py-3 bg-stone-900 text-white rounded-xl font-semibold hover:bg-stone-800 transition-colors">
                     Save Lead
                   </button>
@@ -785,6 +842,7 @@ export default function App() {
         <PipelineView 
           leads={leads} 
           criteria={criteria}
+          users={users}
           onUpdateStatus={handleUpdateLeadStatus}
           onDeleteLead={(id) => handleDelete('leads', id)}
           onResearch={handleResearch}
@@ -799,6 +857,7 @@ export default function App() {
             setCriteriaLeadFilter(lead.id);
             setActiveTab('criteria');
           }}
+          onAssignLead={handleAssignLead}
         />
       )}
 
@@ -895,6 +954,7 @@ export default function App() {
         <TaskManager 
           tasks={tasks} 
           leads={leads} 
+          users={users}
           onAdd={(t) => {
             try {
               addDoc(collection(db, 'tasks'), cleanObject({ ...t, userId: user.uid, createdByEmail: user.email, createdAt: new Date().toISOString() }));

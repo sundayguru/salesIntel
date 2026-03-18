@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Select from 'react-select';
-import { Task, Lead } from '../types';
+import { Task, Lead, UserProfile } from '../types';
 import { 
   CheckCircle2, 
   Circle, 
@@ -16,7 +16,8 @@ import {
   ChevronRight,
   LayoutList,
   CalendarDays,
-  User
+  User,
+  UserPlus
 } from 'lucide-react';
 import { 
   format, 
@@ -35,6 +36,7 @@ import {
 interface TaskManagerProps {
   tasks: Task[];
   leads: Lead[];
+  users: UserProfile[];
   onAdd: (task: Omit<Task, 'id' | 'userId' | 'createdAt' | 'createdByEmail'>) => void;
   onUpdate: (id: string, updates: Partial<Task>) => void;
   onDelete: (id: string) => void;
@@ -45,6 +47,7 @@ interface TaskManagerProps {
 export const TaskManager: React.FC<TaskManagerProps> = ({ 
   tasks, 
   leads, 
+  users,
   onAdd, 
   onUpdate, 
   onDelete,
@@ -55,6 +58,8 @@ export const TaskManager: React.FC<TaskManagerProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newLeadId, setNewLeadId] = useState('');
   const [newDueDate, setNewDueDate] = useState('');
+  const [newAssignedTo, setNewAssignedTo] = useState<UserProfile | null>(null);
+  const [assigningTaskId, setAssigningTaskId] = useState<string | null>(null);
   
   const [statusFilter, setStatusFilter] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all');
   const [leadFilter, setLeadFilter] = useState(initialLeadFilter);
@@ -74,11 +79,14 @@ export const TaskManager: React.FC<TaskManagerProps> = ({
       title: newTitle,
       leadId: newLeadId,
       dueDate: newDueDate || new Date().toISOString().split('T')[0],
-      status: 'todo'
+      status: 'todo',
+      assignedToEmail: newAssignedTo?.email || null,
+      assignedToUid: newAssignedTo?.uid || null
     });
     setNewTitle('');
     setNewLeadId('');
     setNewDueDate('');
+    setNewAssignedTo(null);
     setIsAdding(false);
   };
 
@@ -115,6 +123,10 @@ export const TaskManager: React.FC<TaskManagerProps> = ({
     { value: 'all', label: 'All Leads' },
     ...leads.map(l => ({ value: l.id, label: l.name }))
   ], [leads]);
+
+  const userOptions = useMemo(() => 
+    users.map(u => ({ value: u.uid, label: u.displayName, email: u.email, user: u })),
+  [users]);
 
   const selectStyles = {
     control: (base: any) => ({
@@ -241,6 +253,17 @@ export const TaskManager: React.FC<TaskManagerProps> = ({
                 />
               </div>
               <div className="space-y-1">
+                <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Assign To</label>
+                <Select
+                  options={userOptions}
+                  value={newAssignedTo ? { value: newAssignedTo.uid, label: newAssignedTo.displayName } : null}
+                  onChange={(opt: any) => setNewAssignedTo(opt ? opt.user : null)}
+                  styles={selectStyles}
+                  placeholder="Search user..."
+                  isClearable
+                />
+              </div>
+              <div className="space-y-1">
                 <label className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Due Date</label>
                 <input
                   type="date"
@@ -322,6 +345,40 @@ export const TaskManager: React.FC<TaskManagerProps> = ({
                             {task.createdByEmail}
                           </span>
                         )}
+                        <div className="flex items-center gap-1">
+                          {assigningTaskId === task.id ? (
+                            <div className="w-48">
+                              <Select
+                                options={userOptions}
+                                value={task.assignedToUid ? userOptions.find(o => o.value === task.assignedToUid) : null}
+                                onChange={(opt: any) => {
+                                  onUpdate(task.id, { 
+                                    assignedToEmail: opt ? opt.email : null,
+                                    assignedToUid: opt ? opt.value : null
+                                  });
+                                  setAssigningTaskId(null);
+                                }}
+                                styles={selectStyles}
+                                isClearable
+                                placeholder="Assign..."
+                                autoFocus
+                                onBlur={() => setAssigningTaskId(null)}
+                              />
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => setAssigningTaskId(task.id)}
+                              className="flex items-center gap-1 text-stone-400 hover:text-emerald-600 transition-colors group/assign"
+                            >
+                              <UserPlus className="w-3 h-3 group-hover/assign:scale-110 transition-transform" />
+                              {task.assignedToEmail ? (
+                                <span className="font-medium text-stone-600">{task.assignedToEmail}</span>
+                              ) : (
+                                <span className="italic">Unassigned</span>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
