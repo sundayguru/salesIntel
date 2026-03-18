@@ -44,65 +44,101 @@ service cloud.firestore {
              (data.industry == null || data.industry is string) &&
              (data.website == null || data.website is string) &&
              data.status in ['new', 'researching', 'evaluated', 'contacted'] &&
-             data.userId == request.auth.uid;
+             data.userId == request.auth.uid &&
+             (data.createdByEmail == null || data.createdByEmail is string);
     }
 
     function isValidResearch(data) {
       return data.leadId is string &&
              data.platform is string && data.platform.size() > 0 &&
              data.content is string && data.content.size() > 0 &&
-             data.userId == request.auth.uid;
+             data.userId == request.auth.uid &&
+             (data.createdByEmail == null || data.createdByEmail is string);
     }
 
     function isValidCriterion(data) {
       return data.name is string && data.name.size() > 0 &&
              data.weight is number && data.weight >= 0 && data.weight <= 1 &&
-             data.userId == request.auth.uid;
+             data.userId == request.auth.uid &&
+             (data.createdByEmail == null || data.createdByEmail is string);
     }
 
     function isValidService(data) {
       return data.name is string && data.name.size() > 0 &&
-             data.userId == request.auth.uid;
+             data.userId == request.auth.uid &&
+             (data.createdByEmail == null || data.createdByEmail is string);
     }
 
     function isValidEvaluation(data) {
       return data.leadId is string &&
              data.score is number && data.score >= 0 && data.score <= 100 &&
-             data.userId == request.auth.uid;
+             data.userId == request.auth.uid &&
+             (data.createdByEmail == null || data.createdByEmail is string);
+    }
+
+    function isValidSavedAsset(data) {
+      return data.leadId is string &&
+             data.type in ['email', 'deck'] &&
+             data.content is string && data.content.size() > 0 &&
+             data.userId == request.auth.uid &&
+             (data.createdByEmail == null || data.createdByEmail is string);
+    }
+
+    function isValidTask(data) {
+      return data.leadId is string &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 500 &&
+             data.status in ['todo', 'in-progress', 'done'] &&
+             (data.dueDate == null || data.dueDate is string) &&
+             data.userId == request.auth.uid &&
+             (data.createdByEmail == null || data.createdByEmail is string);
     }
 
     match /leads/{leadId} {
-      allow read: if isDocOwner();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidLead(request.resource.data);
       allow update: if isDocOwner() && isValidLead(request.resource.data) && uidUnchanged();
       allow delete: if isDocOwner();
     }
 
     match /research/{researchId} {
-      allow read: if isDocOwner();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidResearch(request.resource.data);
       allow update: if isDocOwner() && isValidResearch(request.resource.data) && uidUnchanged();
       allow delete: if isDocOwner();
     }
 
     match /criteria/{criterionId} {
-      allow read: if isDocOwner();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidCriterion(request.resource.data);
       allow update: if isDocOwner() && isValidCriterion(request.resource.data) && uidUnchanged();
       allow delete: if isDocOwner();
     }
 
     match /services/{serviceId} {
-      allow read: if isDocOwner();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidService(request.resource.data);
       allow update: if isDocOwner() && isValidService(request.resource.data) && uidUnchanged();
       allow delete: if isDocOwner();
     }
 
     match /evaluations/{evaluationId} {
-      allow read: if isDocOwner();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidEvaluation(request.resource.data);
       allow update: if isDocOwner() && isValidEvaluation(request.resource.data) && uidUnchanged();
+      allow delete: if isDocOwner();
+    }
+
+    match /savedAssets/{assetId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSavedAsset(request.resource.data);
+      allow update: if isDocOwner() && isValidSavedAsset(request.resource.data) && uidUnchanged();
+      allow delete: if isDocOwner();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTask(request.resource.data);
+      allow update: if isDocOwner() && isValidTask(request.resource.data) && uidUnchanged();
       allow delete: if isDocOwner();
     }
   }

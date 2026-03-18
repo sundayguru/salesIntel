@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import Select from 'react-select';
 import { Research, Lead } from '../types';
 import { ExternalLink, Trash2, Plus, Search, Filter, ChevronLeft, ChevronRight, Building2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -23,6 +24,31 @@ export const ResearchTable: React.FC<ResearchTableProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
+
+  const leadOptions = useMemo(() => [
+    { value: 'all', label: 'All Companies' },
+    ...leads.map(l => ({ value: l.id, label: l.name }))
+  ], [leads]);
+
+  const selectStyles = {
+    control: (base: any) => ({
+      ...base,
+      borderRadius: '0.75rem',
+      borderColor: '#e7e5e4',
+      padding: '2px',
+      minWidth: '200px',
+      backgroundColor: '#fafaf9',
+      boxShadow: 'none',
+      '&:hover': { borderColor: '#e7e5e4' }
+    }),
+    option: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: state.isFocused ? '#f5f5f4' : 'white',
+      color: '#1c1917',
+      fontSize: '0.875rem',
+      '&:active': { backgroundColor: '#e7e5e4' }
+    })
+  };
 
   const filteredResearch = research.filter(item => {
     const lead = leads.find(l => l.id === item.leadId);
@@ -58,16 +84,13 @@ export const ResearchTable: React.FC<ResearchTableProps> = ({
             <Filter className="w-4 h-4" />
             Company:
           </div>
-          <select
-            value={leadFilter}
-            onChange={(e) => setLeadFilter(e.target.value)}
-            className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500/20 outline-none min-w-[150px]"
-          >
-            <option value="all">All Companies</option>
-            {leads.map(lead => (
-              <option key={lead.id} value={lead.id}>{lead.name}</option>
-            ))}
-          </select>
+          <Select
+            options={leadOptions}
+            value={leadOptions.find(o => o.value === leadFilter)}
+            onChange={(opt) => setLeadFilter(opt?.value || 'all')}
+            styles={selectStyles}
+            placeholder="Select Company..."
+          />
           <button
             onClick={onAddManual}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap"
@@ -87,6 +110,7 @@ export const ResearchTable: React.FC<ResearchTableProps> = ({
                 <th className="px-6 py-4 text-xs font-semibold text-stone-500 uppercase tracking-wider">Platform</th>
                 <th className="px-6 py-4 text-xs font-semibold text-stone-500 uppercase tracking-wider">Content</th>
                 <th className="px-6 py-4 text-xs font-semibold text-stone-500 uppercase tracking-wider">Source</th>
+                <th className="px-6 py-4 text-xs font-semibold text-stone-500 uppercase tracking-wider">Created By</th>
                 <th className="px-6 py-4 text-xs font-semibold text-stone-500 uppercase tracking-wider">Date</th>
                 <th className="px-6 py-4 text-xs font-semibold text-stone-500 uppercase tracking-wider text-right">Actions</th>
               </tr>
@@ -94,7 +118,7 @@ export const ResearchTable: React.FC<ResearchTableProps> = ({
             <tbody className="divide-y divide-stone-100">
               {paginatedResearch.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-stone-400 italic">
+                  <td colSpan={7} className="px-6 py-12 text-center text-stone-400 italic">
                     No research data found matching your criteria.
                   </td>
                 </tr>
@@ -133,6 +157,9 @@ export const ResearchTable: React.FC<ResearchTableProps> = ({
                         ) : (
                           <span className="text-stone-400 text-xs italic">Manual Entry</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-stone-500 whitespace-nowrap">
+                        {item.createdByEmail || 'System'}
                       </td>
                       <td className="px-6 py-4 text-sm text-stone-500 whitespace-nowrap">
                         {new Date(item.createdAt).toLocaleDateString()}

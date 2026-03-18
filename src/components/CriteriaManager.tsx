@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import Select from 'react-select';
 import { Criterion, Lead, Service } from '../types';
-import { Plus, Trash2, Info, Link2, Sparkles, Loader2, Check, CheckCheck } from 'lucide-react';
+import { Plus, Trash2, Info, Link2, Sparkles, Loader2, Check, CheckCheck, User } from 'lucide-react';
 
 interface CriteriaManagerProps {
   criteria: Criterion[];
   leads: Lead[];
   services: Service[];
-  onAdd: (criterion: Omit<Criterion, 'id' | 'userId'>) => void;
+  onAdd: (criterion: Omit<Criterion, 'id' | 'userId' | 'createdByEmail'>) => void;
   onDelete: (id: string) => void;
-  onSuggest: (lead: Lead | null) => Promise<Omit<Criterion, 'id' | 'userId'>[]>;
+  onSuggest: (lead: Lead | null) => Promise<Omit<Criterion, 'id' | 'userId' | 'createdByEmail'>[]>;
 }
 
 export const CriteriaManager: React.FC<CriteriaManagerProps> = ({ 
@@ -27,7 +27,7 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
   
   const [suggestingForLeadId, setSuggestingForLeadId] = useState('');
   const [isSuggesting, setIsSuggesting] = useState(false);
-  const [suggestions, setSuggestions] = useState<Omit<Criterion, 'id' | 'userId'>[]>([]);
+  const [suggestions, setSuggestions] = useState<Omit<Criterion, 'id' | 'userId' | 'createdByEmail'>[]>([]);
 
   const handleSuggest = async () => {
     const lead = leads.find(l => l.id === suggestingForLeadId) || null;
@@ -57,7 +57,7 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) return;
-    const newCriterion: Omit<Criterion, 'id' | 'userId'> = { 
+    const newCriterion: Omit<Criterion, 'id' | 'userId' | 'createdByEmail'> = { 
       name, 
       description, 
       weight
@@ -257,7 +257,13 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
                 Linked: {leads.find(l => l.id === c.leadId)?.name || 'Unknown Lead'}
               </div>
             )}
-            <p className="text-sm text-stone-600 line-clamp-2">{c.description}</p>
+            <p className="text-sm text-stone-600 line-clamp-2 mb-2">{c.description}</p>
+            {c.createdByEmail && (
+              <div className="flex items-center gap-1 text-[10px] text-stone-400 font-medium border-t border-stone-100 pt-2">
+                <User className="w-2 h-2" />
+                {c.createdByEmail}
+              </div>
+            )}
           </div>
         ))}
       </div>

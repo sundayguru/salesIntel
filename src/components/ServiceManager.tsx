@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Service } from '../types';
-import { Plus, Trash2, Briefcase } from 'lucide-react';
+import { Plus, Trash2, Briefcase, User } from 'lucide-react';
 
 interface ServiceManagerProps {
   services: Service[];
-  onAdd: (service: Omit<Service, 'id' | 'userId'>) => void;
+  onAdd: (service: Omit<Service, 'id' | 'userId' | 'createdByEmail'>) => void;
   onDelete: (id: string) => void;
 }
 
@@ -69,7 +69,13 @@ export const ServiceManager: React.FC<ServiceManagerProps> = ({ services, onAdd,
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-sm text-stone-600 line-clamp-3">{s.description}</p>
+            <p className="text-sm text-stone-600 line-clamp-3 mb-2">{s.description}</p>
+            {s.createdByEmail && (
+              <div className="flex items-center gap-1 text-[10px] text-stone-400 font-medium border-t border-stone-100 pt-2">
+                <User className="w-2 h-2" />
+                {s.createdByEmail}
+              </div>
+            )}
           </div>
         ))}
       </div>

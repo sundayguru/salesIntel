@@ -5,6 +5,7 @@ export interface Lead {
   website?: string;
   status: 'new' | 'researching' | 'evaluated' | 'contacted';
   userId: string;
+  createdByEmail?: string;
   createdAt: string;
 }
 
@@ -15,6 +16,7 @@ export interface Research {
   content: string;
   sourceUrl?: string;
   userId: string;
+  createdByEmail?: string;
   createdAt: string;
 }
 
@@ -25,6 +27,7 @@ export interface Criterion {
   weight: number;
   leadId?: string;
   userId: string;
+  createdByEmail?: string;
 }
 
 export interface Service {
@@ -32,6 +35,7 @@ export interface Service {
   name: string;
   description: string;
   userId: string;
+  createdByEmail?: string;
 }
 
 export interface Evaluation {
@@ -42,5 +46,27 @@ export interface Evaluation {
   insights: string;
   criteriaScores: Record<string, number>;
   userId: string;
+  createdByEmail?: string;
+  createdAt: string;
+}
+
+export interface SavedAsset {
+  id: string;
+  leadId: string;
+  type: 'email' | 'deck';
+  content: string;
+  userId: string;
+  createdByEmail?: string;
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  leadId: string;
+  title: string;
+  dueDate: string;
+  status: 'todo' | 'in-progress' | 'done';
+  userId: string;
+  createdByEmail?: string;
   createdAt: string;
 }

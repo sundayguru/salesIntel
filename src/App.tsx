@@ -20,7 +20,9 @@ import { ResearchTable } from './components/ResearchTable';
 import { CriteriaManager } from './components/CriteriaManager';
 import { ServiceManager } from './components/ServiceManager';
 import { Dashboard } from './components/Dashboard';
-import { Lead, Research, Criterion, Service, Evaluation } from './types';
+import { SavedAssets } from './components/SavedAssets';
+import { TaskManager } from './components/TaskManager';
+import { Lead, Research, Criterion, Service, Evaluation, SavedAsset, Task } from './types';
 import { 
   generateLeadsByIndustry, 
   researchCompanyAI, 
@@ -29,7 +31,7 @@ import {
   generateSalesDeckAI,
   suggestCriteriaAI
 } from './services/gemini';
-import { Plus, Search, Loader2, X, Send, FileText, AlertTriangle, Filter, ChevronLeft, ChevronRight, Check, CheckCheck, Sparkles, Building2, Globe } from 'lucide-react';
+import { Plus, Search, Loader2, X, Send, FileText, AlertTriangle, Filter, ChevronLeft, ChevronRight, Check, CheckCheck, Sparkles, Building2, Globe, Copy } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 export default function App() {
@@ -42,6 +44,8 @@ export default function App() {
   const [criteria, setCriteria] = useState<Criterion[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [savedAssets, setSavedAssets] = useState<SavedAsset[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [suggestedLeads, setSuggestedLeads] = useState<Partial<Lead>[]>([]);
 
   const [isAddingLead, setIsAddingLead] = useState(false);
@@ -54,6 +58,7 @@ export default function App() {
   const [leadIndustryFilter, setLeadIndustryFilter] = useState('all');
   const [researchLeadFilter, setResearchLeadFilter] = useState('all');
   const [dashboardLeadFilter, setDashboardLeadFilter] = useState('all');
+  const [taskLeadFilter, setTaskLeadFilter] = useState('all');
   const [leadPage, setLeadPage] = useState(1);
   const leadsPerPage = 9;
 
@@ -87,8 +92,9 @@ export default function App() {
   const [isGeneratingLeads, setIsGeneratingLeads] = useState(false);
   const [genIndustry, setGenIndustry] = useState('');
 
-  const [modalContent, setModalContent] = useState<{ title: string; content: string } | null>(null);
+  const [modalContent, setModalContent] = useState<{ title: string; content: string; leadId?: string; type?: 'email' | 'deck' } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCopiedModal, setIsCopiedModal] = useState(false);
   const [isAddingManualResearch, setIsAddingManualResearch] = useState(false);
   const [manualResearchContent, setManualResearchContent] = useState('');
   const [manualResearchLeadId, setManualResearchLeadId] = useState('');
@@ -102,6 +108,7 @@ export default function App() {
       platform: 'Manual',
       content: manualResearchContent,
       userId: user.uid,
+      createdByEmail: user.email,
       createdAt: new Date().toISOString()
     }));
     setManualResearchContent('');
@@ -120,29 +127,39 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const qLeads = query(collection(db, 'leads'), where('userId', '==', user.uid));
+    const qLeads = query(collection(db, 'leads'));
     const unsubLeads = onSnapshot(qLeads, (snapshot) => {
       setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
     });
 
-    const qResearch = query(collection(db, 'research'), where('userId', '==', user.uid));
+    const qResearch = query(collection(db, 'research'));
     const unsubResearch = onSnapshot(qResearch, (snapshot) => {
       setResearch(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Research)));
     });
 
-    const qCriteria = query(collection(db, 'criteria'), where('userId', '==', user.uid));
+    const qCriteria = query(collection(db, 'criteria'));
     const unsubCriteria = onSnapshot(qCriteria, (snapshot) => {
       setCriteria(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Criterion)));
     });
 
-    const qServices = query(collection(db, 'services'), where('userId', '==', user.uid));
+    const qServices = query(collection(db, 'services'));
     const unsubServices = onSnapshot(qServices, (snapshot) => {
       setServices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service)));
     });
 
-    const qEvaluations = query(collection(db, 'evaluations'), where('userId', '==', user.uid));
+    const qEvaluations = query(collection(db, 'evaluations'));
     const unsubEvaluations = onSnapshot(qEvaluations, (snapshot) => {
       setEvaluations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evaluation)));
+    });
+
+    const qTasks = query(collection(db, 'tasks'));
+    const unsubTasks = onSnapshot(qTasks, (snapshot) => {
+      setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
+    });
+
+    const qSavedAssets = query(collection(db, 'savedAssets'));
+    const unsubSavedAssets = onSnapshot(qSavedAssets, (snapshot) => {
+      setSavedAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedAsset)));
     });
 
     return () => {
@@ -151,6 +168,8 @@ export default function App() {
       unsubCriteria();
       unsubServices();
       unsubEvaluations();
+      unsubTasks();
+      unsubSavedAssets();
     };
   }, [user]);
 
@@ -163,6 +182,7 @@ export default function App() {
       website: newLeadWebsite,
       status: 'new',
       userId: user.uid,
+      createdByEmail: user.email,
       createdAt: new Date().toISOString()
     }));
     setNewLeadName('');
@@ -190,6 +210,7 @@ export default function App() {
       ...suggested,
       status: 'new',
       userId: user.uid,
+      createdByEmail: user.email,
       createdAt: new Date().toISOString()
     }));
     setSuggestedLeads(prev => prev.filter(l => l.name !== suggested.name));
@@ -202,6 +223,7 @@ export default function App() {
         ...lead,
         status: 'new',
         userId: user.uid,
+        createdByEmail: user.email,
         createdAt: new Date().toISOString()
       }));
     }
@@ -220,6 +242,7 @@ export default function App() {
         ...res,
         leadId: lead.id,
         userId: user.uid,
+        createdByEmail: user.email,
         createdAt: new Date().toISOString()
       }));
     }
@@ -245,6 +268,7 @@ export default function App() {
       ...evaluation,
       leadId: lead.id,
       userId: user.uid,
+      createdByEmail: user.email,
       createdAt: new Date().toISOString()
     }));
     await updateDoc(doc(db, 'leads', lead.id), { status: 'evaluated' });
@@ -264,7 +288,12 @@ export default function App() {
     }
     setIsProcessing(true);
     const email = await generateOutreachEmail(lead, evaluation, services);
-    setModalContent({ title: `Outreach Email for ${lead.name}`, content: email });
+    setModalContent({ 
+      title: `Outreach Email for ${lead.name}`, 
+      content: email,
+      leadId: lead.id,
+      type: 'email'
+    });
     setIsProcessing(false);
   };
 
@@ -279,8 +308,29 @@ export default function App() {
     }
     setIsProcessing(true);
     const deck = await generateSalesDeckAI(lead, evaluation, services);
-    setModalContent({ title: `Sales Deck for ${lead.name}`, content: deck });
+    setModalContent({ 
+      title: `Sales Deck for ${lead.name}`, 
+      content: deck,
+      leadId: lead.id,
+      type: 'deck'
+    });
     setIsProcessing(false);
+  };
+
+  const handleSaveAsset = async () => {
+    if (!user || !modalContent || !modalContent.leadId || !modalContent.type) return;
+    
+    await addDoc(collection(db, 'savedAssets'), cleanObject({
+      leadId: modalContent.leadId,
+      type: modalContent.type,
+      content: modalContent.content,
+      userId: user.uid,
+      createdByEmail: user.email,
+      createdAt: new Date().toISOString()
+    }));
+    
+    setModalContent(null);
+    setActiveTab('assets');
   };
 
   const handleDelete = (collectionName: string, id: string) => {
@@ -304,7 +354,14 @@ export default function App() {
   if (!user) return <Auth />;
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} userEmail={user.email}>
+    <Layout 
+      activeTab={activeTab} 
+      setActiveTab={(tab) => {
+        setActiveTab(tab);
+        if (tab === 'tasks') setTaskLeadFilter('all');
+      }} 
+      userEmail={user.email}
+    >
       {activeTab === 'leads' && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -460,6 +517,10 @@ export default function App() {
                 onEvaluate={handleEvaluate}
                 onEmail={handleEmail}
                 onDeck={handleDeck}
+                onTasks={(lead) => {
+                  setTaskLeadFilter(lead.id);
+                  setActiveTab('tasks');
+                }}
               />
             ))}
           </div>
@@ -637,6 +698,26 @@ export default function App() {
         />
       )}
 
+      {activeTab === 'assets' && (
+        <SavedAssets 
+          assets={savedAssets} 
+          leads={leads} 
+          onDelete={(id) => handleDelete('savedAssets', id)}
+        />
+      )}
+
+      {activeTab === 'tasks' && (
+        <TaskManager 
+          tasks={tasks} 
+          leads={leads} 
+          onAdd={(t) => addDoc(collection(db, 'tasks'), cleanObject({ ...t, userId: user.uid, createdByEmail: user.email, createdAt: new Date().toISOString() }))}
+          onUpdate={(id, updates) => updateDoc(doc(db, 'tasks', id), cleanObject(updates))}
+          onDelete={(id) => handleDelete('tasks', id)}
+          initialLeadFilter={taskLeadFilter}
+          onClearFilter={() => setTaskLeadFilter('all')}
+        />
+      )}
+
       {activeTab === 'settings' && (
         <div className="space-y-12">
           <section>
@@ -647,7 +728,7 @@ export default function App() {
               leads={leads}
               services={services}
               onAdd={(c) => {
-                const data = cleanObject({ ...c, userId: user.uid });
+                const data = cleanObject({ ...c, userId: user.uid, createdByEmail: user.email });
                 addDoc(collection(db, 'criteria'), data);
               }}
               onDelete={(id) => handleDelete('criteria', id)}
@@ -659,7 +740,7 @@ export default function App() {
             <p className="text-stone-500 mb-6">List the services you offer to help AI personalize outreach.</p>
             <ServiceManager 
               services={services} 
-              onAdd={(s) => addDoc(collection(db, 'services'), cleanObject({ ...s, userId: user.uid }))}
+              onAdd={(s) => addDoc(collection(db, 'services'), cleanObject({ ...s, userId: user.uid, createdByEmail: user.email }))}
               onDelete={(id) => handleDelete('services', id)}
             />
           </section>
@@ -690,14 +771,38 @@ export default function App() {
               <ReactMarkdown>{modalContent.content}</ReactMarkdown>
             </div>
             <div className="p-6 border-t border-stone-100 flex justify-end gap-3">
+              {modalContent.leadId && modalContent.type && (
+                <button 
+                  onClick={handleSaveAsset}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors flex items-center gap-2"
+                >
+                  <Check className="w-4 h-4" />
+                  Save to Assets
+                </button>
+              )}
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(modalContent.content);
-                  alert("Copied to clipboard!");
+                  setIsCopiedModal(true);
+                  setTimeout(() => setIsCopiedModal(false), 2000);
                 }}
-                className="px-4 py-2 bg-stone-100 text-stone-700 rounded-xl text-sm font-medium hover:bg-stone-200 transition-colors"
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
+                  isCopiedModal 
+                    ? 'bg-emerald-100 text-emerald-700' 
+                    : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                }`}
               >
-                Copy Content
+                {isCopiedModal ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy Content
+                  </>
+                )}
               </button>
               <button 
                 onClick={() => setModalContent(null)}

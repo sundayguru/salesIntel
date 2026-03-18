@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lead, Criterion } from '../types';
-import { Building2, Globe, Tag, Trash2, Search, FileText, Mail, Briefcase, CheckCircle2, ChevronDown, ChevronUp, Link2 } from 'lucide-react';
+import { Building2, Globe, Tag, Trash2, Search, FileText, Mail, Briefcase, CheckCircle2, ChevronDown, ChevronUp, Link2, User } from 'lucide-react';
 
 interface LeadCardProps {
   lead: Lead;
@@ -10,9 +10,10 @@ interface LeadCardProps {
   onEvaluate: (lead: Lead) => void;
   onEmail: (lead: Lead) => void;
   onDeck: (lead: Lead) => void;
+  onTasks: (lead: Lead) => void;
 }
 
-export const LeadCard: React.FC<LeadCardProps> = ({ lead, criteria, onDelete, onResearch, onEvaluate, onEmail, onDeck }) => {
+export const LeadCard: React.FC<LeadCardProps> = ({ lead, criteria, onDelete, onResearch, onEvaluate, onEmail, onDeck, onTasks }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const linkedCriteria = criteria.filter(c => c.leadId === lead.id);
@@ -34,9 +35,17 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, criteria, onDelete, on
           </div>
           <div>
             <h3 className="font-semibold text-lg text-stone-900">{lead.name}</h3>
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${statusColors[lead.status]}`}>
-              {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${statusColors[lead.status]}`}>
+                {lead.status.charAt(0).toUpperCase() + lead.status.slice(1)}
+              </span>
+              {lead.createdByEmail && (
+                <span className="flex items-center gap-1 text-[10px] text-stone-400 font-medium">
+                  <User className="w-2 h-2" />
+                  {lead.createdByEmail}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <button
@@ -124,6 +133,13 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, criteria, onDelete, on
         >
           <Briefcase className="w-3 h-3" />
           Deck
+        </button>
+        <button
+          onClick={() => onTasks(lead)}
+          className="flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium border border-stone-200 text-stone-700 rounded-lg hover:bg-stone-50 transition-colors"
+        >
+          <CheckCircle2 className="w-3 h-3" />
+          Tasks
         </button>
       </div>
     </div>

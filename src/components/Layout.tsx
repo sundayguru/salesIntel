@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, Users, Settings, Briefcase, Search, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, Briefcase, Search, LogOut, FileText, CheckCircle2 } from 'lucide-react';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 
@@ -28,6 +28,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
             { id: 'leads', label: 'Leads', icon: Users },
             { id: 'research', label: 'Research', icon: Search },
             { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+            { id: 'tasks', label: 'Tasks', icon: CheckCircle2 },
+            { id: 'assets', label: 'Saved Assets', icon: FileText },
             { id: 'settings', label: 'Settings', icon: Settings },
           ].map((item) => (
             <button

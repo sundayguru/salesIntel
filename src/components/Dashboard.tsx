@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import Select from 'react-select';
 import { Lead, Evaluation } from '../types';
-import { BarChart3, TrendingUp, AlertCircle, CheckCircle2, Star, Search, Filter, X } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertCircle, CheckCircle2, Star, Search, Filter, X, User } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface DashboardProps {
@@ -25,6 +26,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setLeadFilter(initialLeadFilter);
     }
   }, [initialLeadFilter]);
+
+  const leadOptions = useMemo(() => [
+    { value: 'all', label: 'All Companies' },
+    ...leads.filter(l => evaluations.some(e => e.leadId === l.id)).map(l => ({ value: l.id, label: l.name }))
+  ], [leads, evaluations]);
+
+  const selectStyles = {
+    control: (base: any) => ({
+      ...base,
+      borderRadius: '0.75rem',
+      borderColor: '#e7e5e4',
+      padding: '2px',
+      minWidth: '200px',
+      backgroundColor: '#fafaf9',
+      boxShadow: 'none',
+      '&:hover': { borderColor: '#e7e5e4' }
+    }),
+    option: (base: any, state: any) => ({
+      ...base,
+      backgroundColor: state.isFocused ? '#f5f5f4' : 'white',
+      color: '#1c1917',
+      fontSize: '0.875rem',
+      '&:active': { backgroundColor: '#e7e5e4' }
+    })
+  };
 
   const filteredEvaluations = evaluations.filter(evalItem => {
     const lead = leads.find(l => l.id === evalItem.leadId);
@@ -84,22 +110,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
               className="w-full pl-10 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 outline-none"
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-              <select
-                value={leadFilter}
-                onChange={(e) => {
-                  setLeadFilter(e.target.value);
-                  if (e.target.value === 'all' && onClearFilter) onClearFilter();
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 z-10" />
+              <Select
+                options={leadOptions}
+                value={leadOptions.find(o => o.value === leadFilter)}
+                onChange={(opt) => {
+                  const val = opt?.value || 'all';
+                  setLeadFilter(val);
+                  if (val === 'all' && onClearFilter) onClearFilter();
                 }}
-                className="pl-10 pr-8 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 outline-none appearance-none"
-              >
-                <option value="all">All Companies</option>
-                {leads.filter(l => evaluations.some(e => e.leadId === l.id)).map(lead => (
-                  <option key={lead.id} value={lead.id}>{lead.name}</option>
-                ))}
-              </select>
+                styles={{
+                  ...selectStyles,
+                  control: (base: any) => ({
+                    ...selectStyles.control(base),
+                    paddingLeft: '32px'
+                  })
+                }}
+                placeholder="Select Company..."
+              />
             </div>
             <select
               value={scoreFilter}
@@ -235,6 +265,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <p className="text-xs text-stone-500">{new Date(evalItem.createdAt).toLocaleDateString()}</p>
                             <span className="text-xs text-stone-300">•</span>
                             <p className="text-xs font-medium text-amber-600">Confidence: {evalItem.confidenceScore}%</p>
+                            {evalItem.createdByEmail && (
+                              <>
+                                <span className="text-xs text-stone-300">•</span>
+                                <div className="flex items-center gap-1 text-xs text-stone-400">
+                                  <User className="w-3 h-3" />
+                                  {evalItem.createdByEmail}
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className={`px-3 py-1 rounded-full text-xs font-bold ${
