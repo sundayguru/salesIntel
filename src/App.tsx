@@ -12,6 +12,35 @@ import {
   updateDoc,
   serverTimestamp 
 } from 'firebase/firestore';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
 import { auth, db } from './firebase';
 import { Auth } from './components/Auth';
 import { Layout } from './components/Layout';
@@ -22,6 +51,7 @@ import { ServiceManager } from './components/ServiceManager';
 import { Dashboard } from './components/Dashboard';
 import { SavedAssets } from './components/SavedAssets';
 import { TaskManager } from './components/TaskManager';
+import { PipelineView } from './components/PipelineView';
 import { Lead, Research, Criterion, Service, Evaluation, SavedAsset, Task } from './types';
 import { 
   generateLeadsByIndustry, 
@@ -31,8 +61,57 @@ import {
   generateSalesDeckAI,
   suggestCriteriaAI
 } from './services/gemini';
-import { Plus, Search, Loader2, X, Send, FileText, AlertTriangle, Filter, ChevronLeft, ChevronRight, Check, CheckCheck, Sparkles, Building2, Globe, Copy } from 'lucide-react';
+import { Plus, Search, Loader2, X, Send, FileText, AlertTriangle, Filter, ChevronLeft, ChevronRight, Check, CheckCheck, Sparkles, Building2, Globe, Copy, Kanban } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      let errorMessage = "Something went wrong.";
+      try {
+        const parsed = JSON.parse(this.state.error.message);
+        if (parsed.error && parsed.operationType) {
+          errorMessage = `Firestore ${parsed.operationType} error: ${parsed.error}`;
+        }
+      } catch (e) {
+        errorMessage = this.state.error.message || String(this.state.error);
+      }
+
+      return (
+        <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4">
+          <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-bold text-stone-900 mb-2">Application Error</h2>
+            <p className="text-stone-600 mb-6">{errorMessage}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-3 bg-stone-900 text-white rounded-xl font-semibold hover:bg-stone-800 transition-colors"
+            >
+              Reload Application
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -47,6 +126,31 @@ export default function App() {
   const [savedAssets, setSavedAssets] = useState<SavedAsset[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [suggestedLeads, setSuggestedLeads] = useState<Partial<Lead>[]>([]);
+  const [, setAsyncError] = useState(); // Used to throw async errors to ErrorBoundary
+
+  const handleFirestoreError = (error: unknown, operationType: OperationType, path: string | null) => {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+        tenantId: auth.currentUser?.tenantId,
+        providerInfo: auth.currentUser?.providerData.map(provider => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          email: provider.email,
+          photoUrl: provider.photoURL
+        })) || []
+      },
+      operationType,
+      path
+    }
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    const finalError = new Error(JSON.stringify(errInfo));
+    setAsyncError(() => { throw finalError; });
+  };
 
   const [isAddingLead, setIsAddingLead] = useState(false);
   const [newLeadName, setNewLeadName] = useState('');
@@ -59,6 +163,7 @@ export default function App() {
   const [researchLeadFilter, setResearchLeadFilter] = useState('all');
   const [dashboardLeadFilter, setDashboardLeadFilter] = useState('all');
   const [taskLeadFilter, setTaskLeadFilter] = useState('all');
+  const [criteriaLeadFilter, setCriteriaLeadFilter] = useState('');
   const [leadPage, setLeadPage] = useState(1);
   const leadsPerPage = 9;
 
@@ -127,39 +232,53 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const qLeads = query(collection(db, 'leads'));
+    const qLeads = query(collection(db, 'leads'), where('userId', '==', user.uid));
     const unsubLeads = onSnapshot(qLeads, (snapshot) => {
       setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'leads');
     });
 
-    const qResearch = query(collection(db, 'research'));
+    const qResearch = query(collection(db, 'research'), where('userId', '==', user.uid));
     const unsubResearch = onSnapshot(qResearch, (snapshot) => {
       setResearch(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Research)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'research');
     });
 
-    const qCriteria = query(collection(db, 'criteria'));
+    const qCriteria = query(collection(db, 'criteria'), where('userId', '==', user.uid));
     const unsubCriteria = onSnapshot(qCriteria, (snapshot) => {
       setCriteria(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Criterion)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'criteria');
     });
 
-    const qServices = query(collection(db, 'services'));
+    const qServices = query(collection(db, 'services'), where('userId', '==', user.uid));
     const unsubServices = onSnapshot(qServices, (snapshot) => {
       setServices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'services');
     });
 
-    const qEvaluations = query(collection(db, 'evaluations'));
+    const qEvaluations = query(collection(db, 'evaluations'), where('userId', '==', user.uid));
     const unsubEvaluations = onSnapshot(qEvaluations, (snapshot) => {
       setEvaluations(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evaluation)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'evaluations');
     });
 
-    const qTasks = query(collection(db, 'tasks'));
-    const unsubTasks = onSnapshot(qTasks, (snapshot) => {
-      setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
-    });
-
-    const qSavedAssets = query(collection(db, 'savedAssets'));
+    const qSavedAssets = query(collection(db, 'savedAssets'), where('userId', '==', user.uid));
     const unsubSavedAssets = onSnapshot(qSavedAssets, (snapshot) => {
       setSavedAssets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SavedAsset)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'savedAssets');
+    });
+
+    const qTasks = query(collection(db, 'tasks'), where('userId', '==', user.uid));
+    const unsubTasks = onSnapshot(qTasks, (snapshot) => {
+      setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'tasks');
     });
 
     return () => {
@@ -176,19 +295,23 @@ export default function App() {
   const handleAddLead = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !newLeadName) return;
-    await addDoc(collection(db, 'leads'), cleanObject({
-      name: newLeadName,
-      industry: newLeadIndustry,
-      website: newLeadWebsite,
-      status: 'new',
-      userId: user.uid,
-      createdByEmail: user.email,
-      createdAt: new Date().toISOString()
-    }));
-    setNewLeadName('');
-    setNewLeadIndustry('');
-    setNewLeadWebsite('');
-    setIsAddingLead(false);
+    try {
+      await addDoc(collection(db, 'leads'), cleanObject({
+        name: newLeadName,
+        industry: newLeadIndustry,
+        website: newLeadWebsite,
+        status: 'new',
+        userId: user.uid,
+        createdByEmail: user.email,
+        createdAt: new Date().toISOString()
+      }));
+      setNewLeadName('');
+      setNewLeadIndustry('');
+      setNewLeadWebsite('');
+      setIsAddingLead(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'leads');
+    }
   };
 
   const handleGenerateLeads = async () => {
@@ -234,21 +357,26 @@ export default function App() {
   const handleResearch = async (lead: Lead) => {
     if (!user) return;
     setIsProcessing(true);
-    await updateDoc(doc(db, 'leads', lead.id), { status: 'researching' });
-    const leadCriteria = criteria.filter(c => !c.leadId || c.leadId === lead.id);
-    const results = await researchCompanyAI(lead.name, leadCriteria);
-    for (const res of results) {
-      await addDoc(collection(db, 'research'), cleanObject({
-        ...res,
-        leadId: lead.id,
-        userId: user.uid,
-        createdByEmail: user.email,
-        createdAt: new Date().toISOString()
-      }));
+    try {
+      await updateDoc(doc(db, 'leads', lead.id), { status: 'researching' });
+      const leadCriteria = criteria.filter(c => !c.leadId || c.leadId === lead.id);
+      const results = await researchCompanyAI(lead.name, leadCriteria);
+      for (const res of results) {
+        await addDoc(collection(db, 'research'), cleanObject({
+          ...res,
+          leadId: lead.id,
+          userId: user.uid,
+          createdByEmail: user.email,
+          createdAt: new Date().toISOString()
+        }));
+      }
+      setIsProcessing(false);
+      setResearchLeadFilter(lead.id);
+      setActiveTab('research');
+    } catch (error) {
+      setIsProcessing(false);
+      handleFirestoreError(error, OperationType.WRITE, 'research');
     }
-    setIsProcessing(false);
-    setResearchLeadFilter(lead.id);
-    setActiveTab('research');
   };
 
   const handleEvaluate = async (lead: Lead) => {
@@ -262,19 +390,24 @@ export default function App() {
       return;
     }
     setIsProcessing(true);
-    const leadCriteria = criteria.filter(c => !c.leadId || c.leadId === lead.id);
-    const evaluation = await evaluateLeadAI(lead, leadResearch, leadCriteria, services);
-    await addDoc(collection(db, 'evaluations'), cleanObject({
-      ...evaluation,
-      leadId: lead.id,
-      userId: user.uid,
-      createdByEmail: user.email,
-      createdAt: new Date().toISOString()
-    }));
-    await updateDoc(doc(db, 'leads', lead.id), { status: 'evaluated' });
-    setIsProcessing(false);
-    setDashboardLeadFilter(lead.id);
-    setActiveTab('dashboard');
+    try {
+      const leadCriteria = criteria.filter(c => !c.leadId || c.leadId === lead.id);
+      const evaluation = await evaluateLeadAI(lead, leadResearch, leadCriteria, services);
+      await addDoc(collection(db, 'evaluations'), cleanObject({
+        ...evaluation,
+        leadId: lead.id,
+        userId: user.uid,
+        createdByEmail: user.email,
+        createdAt: new Date().toISOString()
+      }));
+      await updateDoc(doc(db, 'leads', lead.id), { status: 'evaluated' });
+      setIsProcessing(false);
+      setDashboardLeadFilter(lead.id);
+      setActiveTab('dashboard');
+    } catch (error) {
+      setIsProcessing(false);
+      handleFirestoreError(error, OperationType.WRITE, 'evaluations');
+    }
   };
 
   const handleEmail = async (lead: Lead) => {
@@ -317,20 +450,32 @@ export default function App() {
     setIsProcessing(false);
   };
 
+  const handleUpdateLeadStatus = async (id: string, status: Lead['status']) => {
+    try {
+      await updateDoc(doc(db, 'leads', id), { status });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `leads/${id}`);
+    }
+  };
+
   const handleSaveAsset = async () => {
     if (!user || !modalContent || !modalContent.leadId || !modalContent.type) return;
     
-    await addDoc(collection(db, 'savedAssets'), cleanObject({
-      leadId: modalContent.leadId,
-      type: modalContent.type,
-      content: modalContent.content,
-      userId: user.uid,
-      createdByEmail: user.email,
-      createdAt: new Date().toISOString()
-    }));
-    
-    setModalContent(null);
-    setActiveTab('assets');
+    try {
+      await addDoc(collection(db, 'savedAssets'), cleanObject({
+        leadId: modalContent.leadId,
+        type: modalContent.type,
+        content: modalContent.content,
+        userId: user.uid,
+        createdByEmail: user.email,
+        createdAt: new Date().toISOString()
+      }));
+      
+      setModalContent(null);
+      setActiveTab('assets');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'savedAssets');
+    }
   };
 
   const handleDelete = (collectionName: string, id: string) => {
@@ -339,8 +484,12 @@ export default function App() {
 
   const confirmDelete = async () => {
     if (!deleteConfirmation) return;
-    await deleteDoc(doc(db, deleteConfirmation.collection, deleteConfirmation.id));
-    setDeleteConfirmation(null);
+    try {
+      await deleteDoc(doc(db, deleteConfirmation.collection, deleteConfirmation.id));
+      setDeleteConfirmation(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `${deleteConfirmation.collection}/${deleteConfirmation.id}`);
+    }
   };
 
   if (loading) {
@@ -354,14 +503,16 @@ export default function App() {
   if (!user) return <Auth />;
 
   return (
-    <Layout 
-      activeTab={activeTab} 
-      setActiveTab={(tab) => {
-        setActiveTab(tab);
-        if (tab === 'tasks') setTaskLeadFilter('all');
-      }} 
-      userEmail={user.email}
-    >
+    <ErrorBoundary>
+      <Layout 
+        activeTab={activeTab} 
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          if (tab === 'tasks') setTaskLeadFilter('all');
+          if (tab === 'criteria') setCriteriaLeadFilter('');
+        }} 
+        userEmail={user.email}
+      >
       {activeTab === 'leads' && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -369,13 +520,22 @@ export default function App() {
               <h2 className="text-2xl font-bold text-stone-900">Company Leads</h2>
               <p className="text-stone-500">Manage and research your target companies.</p>
             </div>
-            <button
-              onClick={() => setIsAddingLead(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl text-sm font-medium hover:bg-stone-800 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Lead
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setActiveTab('pipeline')}
+                className="flex items-center gap-2 px-4 py-2 bg-stone-100 text-stone-700 rounded-xl text-sm font-medium hover:bg-stone-200 transition-colors"
+              >
+                <Kanban className="w-4 h-4" />
+                View Pipeline
+              </button>
+              <button
+                onClick={() => setIsAddingLead(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-xl text-sm font-medium hover:bg-stone-800 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Lead
+              </button>
+            </div>
           </div>
 
           {/* Generate Leads Section */}
@@ -521,6 +681,10 @@ export default function App() {
                   setTaskLeadFilter(lead.id);
                   setActiveTab('tasks');
                 }}
+                onAddCriteria={(lead) => {
+                  setCriteriaLeadFilter(lead.id);
+                  setActiveTab('criteria');
+                }}
               />
             ))}
           </div>
@@ -617,6 +781,27 @@ export default function App() {
             </div>
           )}
 
+      {activeTab === 'pipeline' && (
+        <PipelineView 
+          leads={leads} 
+          criteria={criteria}
+          onUpdateStatus={handleUpdateLeadStatus}
+          onDeleteLead={(id) => handleDelete('leads', id)}
+          onResearch={handleResearch}
+          onEvaluate={handleEvaluate}
+          onEmail={handleEmail}
+          onDeck={handleDeck}
+          onTasks={(lead) => {
+            setTaskLeadFilter(lead.id);
+            setActiveTab('tasks');
+          }}
+          onAddCriteria={(lead) => {
+            setCriteriaLeadFilter(lead.id);
+            setActiveTab('criteria');
+          }}
+        />
+      )}
+
       {activeTab === 'research' && (
         <div className="space-y-8">
           <ResearchTable 
@@ -710,40 +895,68 @@ export default function App() {
         <TaskManager 
           tasks={tasks} 
           leads={leads} 
-          onAdd={(t) => addDoc(collection(db, 'tasks'), cleanObject({ ...t, userId: user.uid, createdByEmail: user.email, createdAt: new Date().toISOString() }))}
-          onUpdate={(id, updates) => updateDoc(doc(db, 'tasks', id), cleanObject(updates))}
+          onAdd={(t) => {
+            try {
+              addDoc(collection(db, 'tasks'), cleanObject({ ...t, userId: user.uid, createdByEmail: user.email, createdAt: new Date().toISOString() }));
+            } catch (error) {
+              handleFirestoreError(error, OperationType.CREATE, 'tasks');
+            }
+          }}
+          onUpdate={(id, updates) => {
+            try {
+              updateDoc(doc(db, 'tasks', id), cleanObject(updates));
+            } catch (error) {
+              handleFirestoreError(error, OperationType.UPDATE, `tasks/${id}`);
+            }
+          }}
           onDelete={(id) => handleDelete('tasks', id)}
           initialLeadFilter={taskLeadFilter}
           onClearFilter={() => setTaskLeadFilter('all')}
         />
       )}
 
-      {activeTab === 'settings' && (
-        <div className="space-y-12">
-          <section>
-            <h2 className="text-2xl font-bold text-stone-900 mb-2">Evaluation Criteria</h2>
-            <p className="text-stone-500 mb-6">Define how AI should score your leads.</p>
-            <CriteriaManager 
-              criteria={criteria} 
-              leads={leads}
-              services={services}
-              onAdd={(c) => {
+      {activeTab === 'criteria' && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-stone-900">Evaluation Criteria</h2>
+            <p className="text-stone-500">Define how AI should score your leads.</p>
+          </div>
+          <CriteriaManager 
+            criteria={criteria} 
+            leads={leads}
+            services={services}
+            initialLeadId={criteriaLeadFilter}
+            onAdd={(c) => {
+              try {
                 const data = cleanObject({ ...c, userId: user.uid, createdByEmail: user.email });
                 addDoc(collection(db, 'criteria'), data);
-              }}
-              onDelete={(id) => handleDelete('criteria', id)}
-              onSuggest={(lead) => suggestCriteriaAI(lead, services)}
-            />
-          </section>
-          <section>
-            <h2 className="text-2xl font-bold text-stone-900 mb-2">Your Services</h2>
-            <p className="text-stone-500 mb-6">List the services you offer to help AI personalize outreach.</p>
-            <ServiceManager 
-              services={services} 
-              onAdd={(s) => addDoc(collection(db, 'services'), cleanObject({ ...s, userId: user.uid, createdByEmail: user.email }))}
-              onDelete={(id) => handleDelete('services', id)}
-            />
-          </section>
+              } catch (error) {
+                handleFirestoreError(error, OperationType.CREATE, 'criteria');
+              }
+            }}
+            onDelete={(id) => handleDelete('criteria', id)}
+            onSuggest={(lead) => suggestCriteriaAI(lead, services)}
+          />
+        </div>
+      )}
+
+      {activeTab === 'services' && (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-2xl font-bold text-stone-900">Our Services</h2>
+            <p className="text-stone-500">List the services you offer to help AI personalize outreach.</p>
+          </div>
+          <ServiceManager 
+            services={services} 
+            onAdd={(s) => {
+              try {
+                addDoc(collection(db, 'services'), cleanObject({ ...s, userId: user.uid, createdByEmail: user.email }));
+              } catch (error) {
+                handleFirestoreError(error, OperationType.CREATE, 'services');
+              }
+            }}
+            onDelete={(id) => handleDelete('services', id)}
+          />
         </div>
       )}
 
@@ -843,5 +1056,6 @@ export default function App() {
         </div>
       )}
     </Layout>
+    </ErrorBoundary>
   );
 }

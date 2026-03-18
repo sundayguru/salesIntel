@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lead, Criterion } from '../types';
-import { Building2, Globe, Tag, Trash2, Search, FileText, Mail, Briefcase, CheckCircle2, ChevronDown, ChevronUp, Link2, User } from 'lucide-react';
+import { Building2, Globe, Tag, Trash2, Search, FileText, Mail, Briefcase, CheckCircle2, ChevronDown, ChevronUp, Link2, User, Plus } from 'lucide-react';
 
 interface LeadCardProps {
   lead: Lead;
@@ -11,9 +11,20 @@ interface LeadCardProps {
   onEmail: (lead: Lead) => void;
   onDeck: (lead: Lead) => void;
   onTasks: (lead: Lead) => void;
+  onAddCriteria: (lead: Lead) => void;
 }
 
-export const LeadCard: React.FC<LeadCardProps> = ({ lead, criteria, onDelete, onResearch, onEvaluate, onEmail, onDeck, onTasks }) => {
+export const LeadCard: React.FC<LeadCardProps> = ({ 
+  lead, 
+  criteria, 
+  onDelete, 
+  onResearch, 
+  onEvaluate, 
+  onEmail, 
+  onDeck, 
+  onTasks,
+  onAddCriteria
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const linkedCriteria = criteria.filter(c => c.leadId === lead.id);
@@ -71,6 +82,19 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, criteria, onDelete, on
             </a>
           </div>
         )}
+        
+        {linkedCriteria.length === 0 && (
+          <div className="pt-4">
+            <button
+              onClick={() => onAddCriteria(lead)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-bold border border-emerald-100 hover:bg-emerald-100 transition-all group/cta"
+            >
+              <Plus className="w-4 h-4 group-hover/cta:scale-110 transition-transform" />
+              Add criteria
+            </button>
+          </div>
+        )}
+
         <div className="pt-3 border-t border-stone-100">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">

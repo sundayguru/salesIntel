@@ -10,6 +10,7 @@
         "website": { "type": "string", "description": "Company website URL" },
         "status": { "type": "string", "enum": ["new", "researching", "evaluated", "contacted"], "description": "Current status of the lead" },
         "userId": { "type": "string", "description": "Owner of the lead" },
+        "createdByEmail": { "type": "string", "description": "Email of the creator" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
       "required": ["name", "userId", "createdAt"]
@@ -24,6 +25,7 @@
         "content": { "type": "string", "description": "Summarized content" },
         "sourceUrl": { "type": "string", "description": "Original URL if available" },
         "userId": { "type": "string", "description": "Owner of the research" },
+        "createdByEmail": { "type": "string", "description": "Email of the creator" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
       "required": ["leadId", "platform", "content", "userId", "createdAt"]
@@ -36,7 +38,9 @@
         "name": { "type": "string", "description": "Criterion name" },
         "description": { "type": "string", "description": "What this criterion evaluates" },
         "weight": { "type": "number", "description": "Weight in the final score (0-1)" },
-        "userId": { "type": "string", "description": "Owner of the criterion" }
+        "leadId": { "type": "string", "description": "Optional reference to a specific Lead" },
+        "userId": { "type": "string", "description": "Owner of the criterion" },
+        "createdByEmail": { "type": "string", "description": "Email of the creator" }
       },
       "required": ["name", "weight", "userId"]
     },
@@ -47,7 +51,8 @@
       "properties": {
         "name": { "type": "string", "description": "Service name" },
         "description": { "type": "string", "description": "Service details" },
-        "userId": { "type": "string", "description": "Owner of the service" }
+        "userId": { "type": "string", "description": "Owner of the service" },
+        "createdByEmail": { "type": "string", "description": "Email of the creator" }
       },
       "required": ["name", "userId"]
     },
@@ -61,6 +66,7 @@
         "insights": { "type": "string", "description": "Detailed AI insights" },
         "criteriaScores": { "type": "object", "description": "Breakdown of scores per criterion" },
         "userId": { "type": "string", "description": "Owner of the evaluation" },
+        "createdByEmail": { "type": "string", "description": "Email of the creator" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
       "required": ["leadId", "score", "userId", "createdAt"]
@@ -75,9 +81,24 @@
         "dueDate": { "type": "string", "format": "date", "description": "Due date" },
         "status": { "type": "string", "enum": ["todo", "in-progress", "done"], "description": "Current status" },
         "userId": { "type": "string", "description": "Owner of the task" },
+        "createdByEmail": { "type": "string", "description": "Email of the creator" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
       },
       "required": ["leadId", "title", "status", "userId", "createdAt"]
+    },
+    "SavedAsset": {
+      "title": "SavedAsset",
+      "description": "A generated email or deck for a lead.",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "description": "Reference to the Lead" },
+        "type": { "type": "string", "enum": ["email", "deck"], "description": "Type of asset" },
+        "content": { "type": "string", "description": "Content of the asset" },
+        "userId": { "type": "string", "description": "Owner of the asset" },
+        "createdByEmail": { "type": "string", "description": "Email of the creator" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["leadId", "type", "content", "userId", "createdAt"]
     }
   },
   "firestore": {
@@ -86,6 +107,7 @@
     "/criteria/{criterionId}": { "schema": "Criterion", "description": "Evaluation criteria" },
     "/services/{serviceId}": { "schema": "Service", "description": "Sales services" },
     "/evaluations/{evaluationId}": { "schema": "Evaluation", "description": "Lead evaluations" },
-    "/tasks/{taskId}": { "schema": "Task", "description": "Lead tasks" }
+    "/tasks/{taskId}": { "schema": "Task", "description": "Lead tasks" },
+    "/savedAssets/{assetId}": { "schema": "SavedAsset", "description": "Generated emails and decks" }
   }
 }

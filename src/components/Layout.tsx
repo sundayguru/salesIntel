@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, Users, Settings, Briefcase, Search, LogOut, FileText, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Search, LogOut, FileText, CheckCircle2, Kanban, Target, Package } from 'lucide-react';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 
@@ -26,11 +26,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTa
         <nav className="flex-1 px-4 space-y-1">
           {[
             { id: 'leads', label: 'Leads', icon: Users },
+            { id: 'pipeline', label: 'Pipeline', icon: Kanban },
             { id: 'research', label: 'Research', icon: Search },
             { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
             { id: 'tasks', label: 'Tasks', icon: CheckCircle2 },
             { id: 'assets', label: 'Saved Assets', icon: FileText },
-            { id: 'settings', label: 'Settings', icon: Settings },
+            { id: 'criteria', label: 'Evaluation Criteria', icon: Target },
+            { id: 'services', label: 'Our Services', icon: Package },
           ].map((item) => (
             <button
               key={item.id}

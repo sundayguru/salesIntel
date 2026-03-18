@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import Select from 'react-select';
 import { Criterion, Lead, Service } from '../types';
-import { Plus, Trash2, Info, Link2, Sparkles, Loader2, Check, CheckCheck, User } from 'lucide-react';
+import { Plus, Trash2, Info, Link2, Sparkles, Loader2, Check, CheckCheck, User, Search, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 interface CriteriaManagerProps {
   criteria: Criterion[];
@@ -10,7 +10,10 @@ interface CriteriaManagerProps {
   onAdd: (criterion: Omit<Criterion, 'id' | 'userId' | 'createdByEmail'>) => void;
   onDelete: (id: string) => void;
   onSuggest: (lead: Lead | null) => Promise<Omit<Criterion, 'id' | 'userId' | 'createdByEmail'>[]>;
+  initialLeadId?: string;
 }
+
+const ITEMS_PER_PAGE = 6;
 
 export const CriteriaManager: React.FC<CriteriaManagerProps> = ({ 
   criteria, 
@@ -18,16 +21,50 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
   services,
   onAdd, 
   onDelete,
-  onSuggest
+  onSuggest,
+  initialLeadId = ''
 }) => {
+  const [isAdding, setIsAdding] = useState(!!initialLeadId);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [weight, setWeight] = useState(0.5);
-  const [leadId, setLeadId] = useState('');
+  const [leadId, setLeadId] = useState(initialLeadId);
   
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'global' | 'linked'>(initialLeadId ? 'linked' : 'all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filterLeadId, setFilterLeadId] = useState(initialLeadId);
+
+  React.useEffect(() => {
+    if (initialLeadId) {
+      setFilterLeadId(initialLeadId);
+      setFilterType('linked');
+      setLeadId(initialLeadId);
+      setIsAdding(true);
+    }
+  }, [initialLeadId]);
+
   const [suggestingForLeadId, setSuggestingForLeadId] = useState('');
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<Omit<Criterion, 'id' | 'userId' | 'createdByEmail'>[]>([]);
+
+  const filteredCriteria = useMemo(() => {
+    return criteria.filter(c => {
+      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           c.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesFilter = filterType === 'all' ? true :
+                           filterType === 'global' ? !c.leadId :
+                           !!c.leadId;
+      const matchesLead = !filterLeadId || c.leadId === filterLeadId;
+      return matchesSearch && matchesFilter && matchesLead;
+    });
+  }, [criteria, searchQuery, filterType, filterLeadId]);
+
+  const totalPages = Math.ceil(filteredCriteria.length / ITEMS_PER_PAGE);
+  const paginatedCriteria = filteredCriteria.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const handleSuggest = async () => {
     const lead = leads.find(l => l.id === suggestingForLeadId) || null;
@@ -70,53 +107,65 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
     setDescription('');
     setWeight(0.5);
     setLeadId('');
+    setIsAdding(false);
   };
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-stone-900 mb-4">Add Evaluation Criterion</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Market Fit"
-                className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Weight (0-1)</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="1"
-                value={weight}
-                onChange={(e) => setWeight(parseFloat(e.target.value))}
-                className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Link to Lead (Optional)</label>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="relative flex-1 w-full max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+          <input
+            type="text"
+            placeholder="Search criteria..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="w-full pl-10 pr-4 py-2 bg-white border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+          />
+        </div>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className="flex bg-white border border-stone-200 rounded-xl p-1">
+            {(['all', 'global', 'linked'] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => {
+                  setFilterType(type);
+                  if (type === 'global') setFilterLeadId('');
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
+                  filterType === type
+                    ? 'bg-stone-100 text-stone-900 shadow-sm'
+                    : 'text-stone-500 hover:text-stone-700'
+                }`}
+              >
+                {type}
+              </button>
+            ))}
+          </div>
+
+          {filterType !== 'global' && (
+            <div className="w-64">
               <Select
-                options={[
-                  { value: '', label: 'Global (All Leads)' },
-                  ...leads.map(l => ({ value: l.id, label: l.name }))
-                ]}
-                value={leadId ? { value: leadId, label: leads.find(l => l.id === leadId)?.name } : { value: '', label: 'Global (All Leads)' }}
-                onChange={(option) => setLeadId(option?.value || '')}
-                placeholder="Search for a company..."
-                className="text-sm"
+                placeholder="Filter by lead..."
+                isClearable
+                options={leads.map(l => ({ value: l.id, label: l.name }))}
+                value={filterLeadId ? { value: filterLeadId, label: leads.find(l => l.id === filterLeadId)?.name || '' } : null}
+                onChange={(option) => {
+                  setFilterLeadId(option ? (option as any).value : '');
+                  if (option) setFilterType('linked');
+                  setCurrentPage(1);
+                }}
                 styles={{
                   control: (base) => ({
                     ...base,
                     borderRadius: '0.75rem',
                     borderColor: '#e7e5e4',
-                    padding: '2px',
+                    fontSize: '0.875rem',
+                    padding: '1px',
                     boxShadow: 'none',
                     '&:hover': {
                       borderColor: '#e7e5e4'
@@ -133,25 +182,111 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
                 }}
               />
             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this criterion measure?"
-              className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 h-24"
-            />
-          </div>
+          )}
+
           <button
-            type="submit"
-            className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors ml-auto"
+            onClick={() => setIsAdding(!isAdding)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              isAdding 
+                ? 'bg-stone-100 text-stone-600 hover:bg-stone-200' 
+                : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm'
+            }`}
           >
-            <Plus className="w-4 h-4" />
-            Add Criterion
+            {isAdding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {isAdding ? 'Cancel' : 'Add Criterion'}
           </button>
-        </form>
+        </div>
       </div>
+
+      {isAdding && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm animate-in fade-in slide-in-from-top-4 duration-200">
+          <h2 className="text-lg font-semibold text-stone-900 mb-4">New Evaluation Criterion</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Market Fit"
+                  className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Weight (0-1)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="1"
+                  value={weight}
+                  onChange={(e) => setWeight(parseFloat(e.target.value))}
+                  className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Link to Lead (Optional)</label>
+                <Select
+                  options={[
+                    { value: '', label: 'Global (All Leads)' },
+                    ...leads.map(l => ({ value: l.id, label: l.name }))
+                  ]}
+                  value={leadId ? { value: leadId, label: leads.find(l => l.id === leadId)?.name } : { value: '', label: 'Global (All Leads)' }}
+                  onChange={(option) => setLeadId(option?.value || '')}
+                  placeholder="Search for a company..."
+                  className="text-sm"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      borderRadius: '0.75rem',
+                      borderColor: '#e7e5e4',
+                      padding: '2px',
+                      boxShadow: 'none',
+                      '&:hover': {
+                        borderColor: '#e7e5e4'
+                      }
+                    }),
+                    option: (base, state) => ({
+                      ...base,
+                      backgroundColor: state.isFocused ? '#f5f5f4' : 'white',
+                      color: '#1c1917',
+                      '&:active': {
+                        backgroundColor: '#e7e5e4'
+                      }
+                    })
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Description</label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What does this criterion measure?"
+                className="w-full px-4 py-2 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 h-24"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsAdding(false)}
+                className="px-6 py-2 text-stone-600 font-medium hover:bg-stone-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Criterion
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* AI Suggestions Section */}
       <div className="bg-emerald-50 rounded-2xl border border-emerald-100 p-6 shadow-sm">
@@ -235,7 +370,7 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {criteria.map((c) => (
+        {paginatedCriteria.map((c) => (
           <div key={c.id} className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm relative group">
             <div className="flex justify-between items-start gap-2 mb-2">
               <div className="flex items-center gap-2 flex-wrap">
@@ -267,6 +402,38 @@ export const CriteriaManager: React.FC<CriteriaManagerProps> = ({
           </div>
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-4 pt-4">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="p-2 bg-white border border-stone-200 rounded-xl disabled:opacity-50 hover:bg-stone-50 transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <span className="text-sm font-medium text-stone-600">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            className="p-2 bg-white border border-stone-200 rounded-xl disabled:opacity-50 hover:bg-stone-50 transition-colors"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {filteredCriteria.length === 0 && (
+        <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center">
+          <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8 text-stone-300" />
+          </div>
+          <h3 className="text-lg font-semibold text-stone-900 mb-1">No criteria found</h3>
+          <p className="text-stone-500">Try adjusting your search or filters.</p>
+        </div>
+      )}
     </div>
   );
 };
