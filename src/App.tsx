@@ -52,6 +52,8 @@ export default function App() {
   const [leadSearchQuery, setLeadSearchQuery] = useState('');
   const [leadStatusFilter, setLeadStatusFilter] = useState('all');
   const [leadIndustryFilter, setLeadIndustryFilter] = useState('all');
+  const [researchLeadFilter, setResearchLeadFilter] = useState('all');
+  const [dashboardLeadFilter, setDashboardLeadFilter] = useState('all');
   const [leadPage, setLeadPage] = useState(1);
   const leadsPerPage = 9;
 
@@ -211,7 +213,8 @@ export default function App() {
     if (!user) return;
     setIsProcessing(true);
     await updateDoc(doc(db, 'leads', lead.id), { status: 'researching' });
-    const results = await researchCompanyAI(lead.name);
+    const leadCriteria = criteria.filter(c => !c.leadId || c.leadId === lead.id);
+    const results = await researchCompanyAI(lead.name, leadCriteria);
     for (const res of results) {
       await addDoc(collection(db, 'research'), cleanObject({
         ...res,
@@ -221,6 +224,7 @@ export default function App() {
       }));
     }
     setIsProcessing(false);
+    setResearchLeadFilter(lead.id);
     setActiveTab('research');
   };
 
@@ -236,7 +240,7 @@ export default function App() {
     }
     setIsProcessing(true);
     const leadCriteria = criteria.filter(c => !c.leadId || c.leadId === lead.id);
-    const evaluation = await evaluateLeadAI(lead, leadResearch, leadCriteria);
+    const evaluation = await evaluateLeadAI(lead, leadResearch, leadCriteria, services);
     await addDoc(collection(db, 'evaluations'), cleanObject({
       ...evaluation,
       leadId: lead.id,
@@ -245,6 +249,7 @@ export default function App() {
     }));
     await updateDoc(doc(db, 'leads', lead.id), { status: 'evaluated' });
     setIsProcessing(false);
+    setDashboardLeadFilter(lead.id);
     setActiveTab('dashboard');
   };
 
@@ -555,6 +560,9 @@ export default function App() {
         <div className="space-y-8">
           <ResearchTable 
             research={research} 
+            leads={leads}
+            leadFilter={researchLeadFilter}
+            setLeadFilter={setResearchLeadFilter}
             onDelete={(id) => handleDelete('research', id)}
             onAddManual={() => setIsAddingManualResearch(true)}
           />
@@ -621,7 +629,12 @@ export default function App() {
       )}
 
       {activeTab === 'dashboard' && (
-        <Dashboard leads={leads} evaluations={evaluations} />
+        <Dashboard 
+          leads={leads} 
+          evaluations={evaluations} 
+          initialLeadFilter={dashboardLeadFilter}
+          onClearFilter={() => setDashboardLeadFilter('all')}
+        />
       )}
 
       {activeTab === 'settings' && (

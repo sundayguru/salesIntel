@@ -32,10 +32,20 @@ export const generateLeadsByIndustry = async (industry: string): Promise<Partial
   }
 };
 
-export const researchCompanyAI = async (companyName: string): Promise<Omit<Research, 'id' | 'leadId' | 'userId' | 'createdAt'>[]> => {
+export const researchCompanyAI = async (
+  companyName: string,
+  criteria: Criterion[]
+): Promise<Omit<Research, 'id' | 'leadId' | 'userId' | 'createdAt'>[]> => {
+  const criteriaText = criteria.map(c => `- ${c.name}: ${c.description}`).join('\n');
+  
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Research the company "${companyName}". Find recent news, social media activity (LinkedIn, Twitter), blog posts, and general market presence. Summarize the findings into key facts.`,
+    contents: `Research the company "${companyName}". 
+    
+    Specifically look for information related to these evaluation criteria:
+    ${criteriaText}
+    
+    Find recent news, social media activity (LinkedIn, Twitter), blog posts, and general market presence. Summarize the findings into key facts that help evaluate the company against the criteria.`,
     config: {
       tools: [{ googleSearch: {} }],
       responseMimeType: "application/json",
@@ -45,7 +55,7 @@ export const researchCompanyAI = async (companyName: string): Promise<Omit<Resea
           type: Type.OBJECT,
           properties: {
             platform: { type: Type.STRING, description: "e.g. LinkedIn, Twitter, News, Blog" },
-            content: { type: Type.STRING, description: "Summarized facts" },
+            content: { type: Type.STRING, description: "Summarized facts related to the criteria" },
             sourceUrl: { type: Type.STRING, description: "URL to the source" }
           },
           required: ["platform", "content"]
@@ -65,46 +75,71 @@ export const researchCompanyAI = async (companyName: string): Promise<Omit<Resea
 export const evaluateLeadAI = async (
   lead: Lead,
   research: Research[],
-  criteria: Criterion[]
+  criteria: Criterion[],
+  services: Service[]
 ): Promise<Omit<Evaluation, 'id' | 'leadId' | 'userId' | 'createdAt'>> => {
   const researchText = research.map(r => `[${r.platform}]: ${r.content}`).join('\n');
   const criteriaText = criteria.map(c => `- ${c.name} (Weight: ${c.weight}): ${c.description}`).join('\n');
+  const servicesText = services.map(s => `- ${s.name}: ${s.description}`).join('\n');
 
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `Evaluate the company "${lead.name}" based on the following research and criteria.
+    contents: `Evaluate the company "${lead.name}" based on the following research, criteria, and services offered.
     
     Research:
     ${researchText}
     
-    Criteria:
+    Criteria (Consider their weights):
     ${criteriaText}
+
+    Services Offered (Evaluate how well the company fits these services):
+    ${servicesText}
     
-    Provide a probability score (0-100) of them needing services, detailed insights, and a breakdown of scores for each criterion.`,
+    Provide a probability score (0-100) of them needing services, a confidence score (0-100) indicating how certain you are about this analysis, detailed insights, and a breakdown of scores for each criterion based on the research and services. 
+    
+    IMPORTANT: In the "criteriaScores" object, use the EXACT names of the criteria provided above as keys. Provide a score from 0-100 for EVERY criterion listed.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          score: { type: Type.NUMBER },
-          insights: { type: Type.STRING },
+          score: { type: Type.NUMBER, description: "Overall probability score (0-100)" },
+          confidenceScore: { type: Type.NUMBER, description: "AI's certainty about the analysis (0-100)" },
+          insights: { type: Type.STRING, description: "Detailed analysis and reasoning" },
           criteriaScores: {
             type: Type.OBJECT,
             description: "Map of criterion name to score (0-100)"
           }
         },
-        required: ["score", "insights", "criteriaScores"]
+        required: ["score", "confidenceScore", "insights", "criteriaScores"]
       }
     }
   });
 
   try {
-    return JSON.parse(response.text || '{}');
+    const result = JSON.parse(response.text || '{}');
+    
+    // Calculate weighted score based on user formula: sum(score * weight) / total_criteria
+    if (result.criteriaScores && criteria.length > 0) {
+      let weightedSum = 0;
+      criteria.forEach(c => {
+        const score = result.criteriaScores[c.name] || 0;
+        weightedSum += score * c.weight;
+      });
+      result.score = Math.round(weightedSum / criteria.length);
+    }
+
+    return result;
   } catch (e) {
     console.error("Failed to parse evaluation:", e);
-    return { score: 0, insights: "Error generating insights", criteriaScores: {} };
+    return { 
+      score: 0, 
+      confidenceScore: 0, 
+      insights: "Error generating insights", 
+      criteriaScores: {} 
+    };
   }
-};
+}
 
 export const generateOutreachEmail = async (
   lead: Lead,

@@ -38,6 +38,7 @@ export interface Evaluation {
   id: string;
   leadId: string;
   score: number;
+  confidenceScore: number;
   insights: string;
   criteriaScores: Record<string, number>;
   userId: string;
